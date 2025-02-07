@@ -3,4 +3,9 @@ name = "rust-tree-walk"
 version = "0.1.0"
 edition = "2021"
 
+[lib]
+name = "rust_tree_walk"
+path = "src/lib.rs"
+
 [dependencies]
+clap = "4.5.28"
