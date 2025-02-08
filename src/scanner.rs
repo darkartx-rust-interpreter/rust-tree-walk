@@ -73,17 +73,17 @@ impl<'a> ScannerIter<'a> {
                 Some('+') => break Some(Token::new(TokenType::Plus, None, self.line)),
                 Some(';') => break Some(Token::new(TokenType::Semicolon, None, self.line)),
                 Some('*') => break Some(Token::new(TokenType::Star, None, self.line)),
-                Some('!') => break Some(self.parse_op_equal(TokenType::Bang, TokenType::BangEqual)),
-                Some('=') => break Some(self.parse_op_equal(TokenType::Equal, TokenType::EqualEqual)),
-                Some('>') => break Some(self.parse_op_equal(TokenType::Greater, TokenType::GreaterEqual)),
-                Some('<') => break Some(self.parse_op_equal(TokenType::Less, TokenType::LessEqual)),
+                Some('!') => break Some(self.scan_op_equal(TokenType::Bang, TokenType::BangEqual)),
+                Some('=') => break Some(self.scan_op_equal(TokenType::Equal, TokenType::EqualEqual)),
+                Some('>') => break Some(self.scan_op_equal(TokenType::Greater, TokenType::GreaterEqual)),
+                Some('<') => break Some(self.scan_op_equal(TokenType::Less, TokenType::LessEqual)),
                 Some('/') => {
-                    let token = self.parse_slash();
+                    let token = self.scan_slash();
                     if token.is_some() { break token; }
                 },
-                Some('"') => break Some(self.parse_string()?),
-                Some(c) if c.is_digit(10) => break Some(self.parse_number(c)),
-                Some(c) if is_identifier_char(c)/* && !c.is_digit(10) */ => break Some(self.parse_identifier(c)),
+                Some('"') => break Some(self.scan_string()?),
+                Some(c) if c.is_digit(10) => break Some(self.scan_number(c)),
+                Some(c) if is_identifier_char(c)/* && !c.is_digit(10) */ => break Some(self.scan_identifier(c)),
                 Some(c) if c.is_whitespace() => {
                     if c == '\n' {
                         self.line += 1;
@@ -105,7 +105,7 @@ impl<'a> ScannerIter<'a> {
         Ok(token)
     }
 
-    fn parse_op_equal(&mut self, op: TokenType, op_equal: TokenType) -> Token {
+    fn scan_op_equal(&mut self, op: TokenType, op_equal: TokenType) -> Token {
         let c = self.next_char();
 
         match c {
@@ -117,12 +117,12 @@ impl<'a> ScannerIter<'a> {
         }
     }
 
-    fn parse_slash(&mut self) -> Option<Token> {
+    fn scan_slash(&mut self) -> Option<Token> {
         let c = self.next_char();
 
         match c {
-            Some('/') => self.parse_single_line_comment(),
-            Some('*') => self.parse_multi_line_comment(),
+            Some('/') => self.scan_single_line_comment(),
+            Some('*') => self.scan_multi_line_comment(),
             _ => {
                 if let Some(c) = c { self.buffer_char(c); }
                 Some(Token::new(TokenType::Slash, None, self.line))
@@ -130,7 +130,7 @@ impl<'a> ScannerIter<'a> {
         }
     }
 
-    fn parse_single_line_comment(&mut self) -> Option<Token> {
+    fn scan_single_line_comment(&mut self) -> Option<Token> {
         loop {
             match self.next_char() {
                 Some('\n') => {
@@ -143,7 +143,7 @@ impl<'a> ScannerIter<'a> {
         }
     }
 
-    fn parse_multi_line_comment(&mut self) -> Option<Token> {
+    fn scan_multi_line_comment(&mut self) -> Option<Token> {
         loop {
             match self.next_char() {
                 Some('\n') => { self.line += 1; },
@@ -161,7 +161,7 @@ impl<'a> ScannerIter<'a> {
 
                     match c {
                         Some('\n') => { self.line += 1; }
-                        Some('*') => { self.parse_multi_line_comment(); },
+                        Some('*') => { self.scan_multi_line_comment(); },
                         None => return None,
                         _ => {}
                     }
@@ -172,7 +172,7 @@ impl<'a> ScannerIter<'a> {
         }
     }
 
-    fn parse_string(&mut self) -> Result<Token, Error> {
+    fn scan_string(&mut self) -> Result<Token, Error> {
         let mut value = String::new();
 
         loop {
@@ -203,7 +203,7 @@ impl<'a> ScannerIter<'a> {
         Ok(Token::new(TokenType::String, Some(value), self.line))
     }
 
-    fn parse_number(&mut self, first: char) -> Token {
+    fn scan_number(&mut self, first: char) -> Token {
         let mut value: String = first.into();
         let mut have_dot = false;
 
@@ -236,7 +236,7 @@ impl<'a> ScannerIter<'a> {
         Token::new(TokenType::Number, Some(value), self.line)
     }
 
-    fn parse_identifier(&mut self, c: char) -> Token {
+    fn scan_identifier(&mut self, c: char) -> Token {
         let mut value: String = c.into();
 
         loop {
