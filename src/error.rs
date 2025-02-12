@@ -37,7 +37,7 @@ impl fmt::Display for Error {
             },
             ParserError { token, message } => {
                 match token {
-                    Some(token) => write!(f, "Error: {message} at {}", token.line()),
+                    Some(token) => write!(f, "Error: {message} at \'{}\' in {}", token, token.line()),
                     None => write!(f, "Error: {message}")
                 }
             }

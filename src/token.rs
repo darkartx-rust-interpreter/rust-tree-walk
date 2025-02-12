@@ -92,15 +92,15 @@ impl fmt::Display for TokenType {
 #[derive(Debug, Clone)]
 pub struct Token {
     token_type: TokenType,
-    value: Option<String>,
+    lexeme: Option<String>,
     line: usize
 }
 
 impl Token {
-    pub fn new(token_type: TokenType, value: Option<String>, line: usize) -> Self {
+    pub fn new(token_type: TokenType, lexeme: Option<String>, line: usize) -> Self {
         Self {
             token_type,
-            value,
+            lexeme,
             line
         }
     }
@@ -109,8 +109,8 @@ impl Token {
         self.token_type
     }
 
-    pub fn value(&self) -> Option<&str> {
-        self.value.as_ref().map(|v| v.as_str())
+    pub fn lexeme(&self) -> Option<&str> {
+        self.lexeme.as_ref().map(String::as_str)
     }
 
     pub fn line(&self) -> usize {
@@ -159,15 +159,15 @@ impl fmt::Display for Token {
             Var => write!(f, "var"),
             While => write!(f, "while"),
             String => {
-                let value = self.value.as_ref().unwrap();
+                let value = self.lexeme().unwrap();
                 write!(f, "\"{}\"", value)
             },
             Number => {
-                let number = self.value.as_ref().unwrap();
+                let number = self.lexeme().unwrap();
                 write!(f, "{}", number)
             },
             Identifier => {
-                let iden = self.value.as_ref().unwrap();
+                let iden = self.lexeme().unwrap();
                 write!(f, "{}", iden)
             }
         }

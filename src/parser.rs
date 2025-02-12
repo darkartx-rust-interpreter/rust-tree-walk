@@ -243,7 +243,7 @@ fn parse_value(token: Token) -> Result<Value, Error> {
         )
     }
 
-    let value = match token.value() {
+    let value = match token.lexeme() {
         None => return Err(
             Error::new(
                 ErrorKind::ParserError {
