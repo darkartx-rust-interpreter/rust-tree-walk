@@ -1,6 +1,9 @@
 use std::{fmt, convert};
 
-use super::token::Token;
+use super::{
+    token::Token,
+    value::Value
+};
 
 pub trait Expression: fmt::Debug {
     fn accept(&self, visitor: &mut dyn Visitor);
@@ -20,10 +23,7 @@ pub struct Binary {
 }
 
 impl Binary {
-    pub fn new<L: Expression + 'static, R: Expression + 'static>(left: L, operator: Token, right: R) -> Self {
-        let left = left.into();
-        let right = right.into();
-
+    pub fn new(left: Box<dyn Expression>, operator: Token, right: Box<dyn Expression>) -> Self {
         Self {
             left,
             operator,
@@ -44,9 +44,7 @@ pub struct Grouping {
 }
 
 impl Grouping {
-    pub fn new<E: Expression + 'static>(expression: E) -> Self {
-        let expression = expression.into();
-
+    pub fn new(expression: Box<dyn Expression>) -> Self {
         Self {
             expression
         }
@@ -61,13 +59,13 @@ impl Expression for Grouping {
 
 #[derive(Debug)]
 pub struct Literal {
-    token: Token
+    value: Value
 }
 
 impl Literal {
-    pub fn new(token: Token) -> Self {
+    pub fn new(value: Value) -> Self {
         Self {
-            token
+            value
         }
     }
 }
@@ -85,9 +83,7 @@ pub struct Unary {
 }
 
 impl Unary {
-    pub fn new<R: Expression + 'static>(operator: Token, right: R) -> Self {
-        let right = right.into();
-
+    pub fn new(operator: Token, right: Box<dyn Expression>) -> Self {
         Self {
             operator,
             right
@@ -137,7 +133,7 @@ impl Visitor for Printer {
     }
 
     fn visit_literal(&mut self, expression: &Literal) {
-        print!("{}", expression.token);
+        print!("{}", expression.value);
     }
 
     fn visit_unary(&mut self, expression: &Unary) {

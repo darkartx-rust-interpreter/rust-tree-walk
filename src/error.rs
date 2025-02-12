@@ -1,9 +1,15 @@
 use std::{fmt, error};
 
+use super::token::Token;
+
 #[derive(Debug)]
 pub(super) enum ErrorKind {
     ScannerError {
         line: usize,
+        message: String
+    },
+    ParserError {
+        token: Option<Token>,
         message: String
     }
 }
@@ -28,6 +34,12 @@ impl fmt::Display for Error {
         match &self.kind {
             ScannerError { line, message } => {
                 write!(f, "Error: {message} in {line}")
+            },
+            ParserError { token, message } => {
+                match token {
+                    Some(token) => write!(f, "Error: {message} at {}", token.line()),
+                    None => write!(f, "Error: {message}")
+                }
             }
         }
     }

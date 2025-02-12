@@ -1,6 +1,8 @@
 use super::{
     scanner::Scanner,
-    error::Error
+    error::Error,
+    parser::Parser,
+    ast::Printer
 };
 
 #[derive(Debug)]
@@ -15,11 +17,13 @@ impl Interpreter {
 
     pub fn run(&mut self, code: &str) -> Result<(), Error> {
         let scanner = Scanner::from_str(code);
+        let mut tokens = scanner.tokens();
+        let mut parser = Parser::new(&mut tokens);
+        let ast = parser.parse()?;
 
-        for token in scanner.tokens() {
-            let token = token?;
-            println!("{token:?}");
-        }
+        let mut printer = Printer::new();
+        ast.accept(&mut printer);
+        println!();
 
         Ok(())
     }

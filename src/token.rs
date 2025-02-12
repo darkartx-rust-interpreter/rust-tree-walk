@@ -42,7 +42,54 @@ pub enum TokenType {
     Identifier
 }
 
-#[derive(Debug)]
+impl fmt::Display for TokenType {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        use TokenType::*;
+
+        match self {
+            LeftParen => write!(f, "LeftParen"),
+            RightParen => write!(f, "RightParen"),
+            LeftBrace => write!(f, "LeftBrace"),
+            RightBrace => write!(f, "RightBrace"),
+            Comma => write!(f, "Comma"),
+            Dot => write!(f, "Dot"),
+            Minus => write!(f, "Minus"),
+            Plus => write!(f, "Plus"),
+            Semicolon => write!(f, "Semicolon"),
+            Slash => write!(f, "Slash"),
+            Star => write!(f, "Star"),
+            Bang => write!(f, "Bang"),
+            BangEqual => write!(f, "BangEqual"),
+            Equal => write!(f, "Equal"),
+            EqualEqual => write!(f, "EqualEqual"),
+            Greater => write!(f, "Greater"),
+            GreaterEqual => write!(f, "GreaterEqual"),
+            Less => write!(f, "Less"),
+            LessEqual => write!(f, "LessEqual"),
+            And => write!(f, "And"),
+            Class => write!(f, "Class"),
+            Else => write!(f, "Else"),
+            False => write!(f, "False"),
+            Fun => write!(f, "Fun"),
+            For => write!(f, "For"),
+            If => write!(f, "If"),
+            Null => write!(f, "Null"),
+            Or => write!(f, "Or"),
+            Print => write!(f, "Print"),
+            Return => write!(f, "Return"),
+            Super => write!(f, "Super"),
+            This => write!(f, "This"),
+            True => write!(f, "True"),
+            Var => write!(f, "Var"),
+            While => write!(f, "While"),
+            String => write!(f, "String"),
+            Number => write!(f, "Number"),
+            Identifier => write!(f, "Identifier"),
+        }
+    }
+}
+
+#[derive(Debug, Clone)]
 pub struct Token {
     token_type: TokenType,
     value: Option<String>,
@@ -56,6 +103,18 @@ impl Token {
             value,
             line
         }
+    }
+
+    pub fn token_type(&self) -> TokenType {
+        self.token_type
+    }
+
+    pub fn value(&self) -> Option<&str> {
+        self.value.as_ref().map(|v| v.as_str())
+    }
+
+    pub fn line(&self) -> usize {
+        self.line
     }
 }
 
