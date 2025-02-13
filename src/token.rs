@@ -39,7 +39,9 @@ pub enum TokenType {
     While,
     String,
     Number,
-    Identifier
+    Identifier,
+    Query,
+    Colon
 }
 
 impl fmt::Display for TokenType {
@@ -85,6 +87,8 @@ impl fmt::Display for TokenType {
             String => write!(f, "String"),
             Number => write!(f, "Number"),
             Identifier => write!(f, "Identifier"),
+            Query => write!(f, "Query"),
+            Colon => write!(f, "Colon"),
         }
     }
 }
@@ -158,6 +162,8 @@ impl fmt::Display for Token {
             True => write!(f, "true"),
             Var => write!(f, "var"),
             While => write!(f, "while"),
+            Query => write!(f, "?"),
+            Colon => write!(f, ":"),
             String => {
                 let value = self.lexeme().unwrap();
                 write!(f, "\"{}\"", value)

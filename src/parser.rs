@@ -1,11 +1,12 @@
 /*
 https://craftinginterpreters.com/parsing-expressions.html
 
-expression     → equality ;
+expression     → equality ( ( "," ) equality )* ;
 equality       → comparison ( ( "!=" | "==" ) comparison )* ;
 comparison     → term ( ( ">" | ">=" | "<" | "<=" ) term )* ;
 term           → factor ( ( "-" | "+" ) factor )* ;
 factor         → unary ( ( "/" | "*" ) unary )* ;
+ternary        → unary ( ( "?" expression ":" expression ) )? ;
 unary          → ( "!" | "-" ) unary
                | primary ;
 primary        → NUMBER | STRING | "true" | "false" | "nil"
@@ -16,7 +17,7 @@ use std::iter;
 
 use super::{
     token::{Token, TokenType},
-    ast::{Expression, Literal, Grouping, Unary, Binary},
+    ast::{Expression, Literal, Grouping, Unary, Binary, Ternary},
     error::{Error, ErrorKind},
     value::Value
 };
@@ -44,7 +45,30 @@ impl<'a> Parser<'a> {
     }
 
     fn expression(&mut self) -> Result<Box<dyn Expression>, Error> {
-        self.equaity()
+        let mut expression = self.equaity()?;
+
+        loop {
+            let token = self.tokens.current();
+
+            match token.as_ref().map(Token::token_type) {
+                Some(Comma) => {
+                    let operator = token.unwrap();
+                    self.tokens.next()?;
+                    let right = self.equaity()?;
+        
+                    expression = Box::new(
+                        Binary::new(
+                            expression,
+                            operator,
+                            right
+                        )
+                    );
+                },
+                _ => break
+            }
+        }
+
+        Ok(expression)
     }
 
     fn equaity(&mut self) -> Result<Box<dyn Expression>, Error> {
@@ -129,7 +153,7 @@ impl<'a> Parser<'a> {
     }
 
     fn factor(&mut self) -> Result<Box<dyn Expression>, Error> {
-        let mut expression = self.unary()?;
+        let mut expression = self.ternary()?;
 
         loop {
             let token = self.tokens.current();
@@ -138,7 +162,7 @@ impl<'a> Parser<'a> {
                 Some(Slash | Star) => {
                     let operator = token.unwrap();
                     self.tokens.next()?;
-                    let right = self.unary()?;
+                    let right = self.ternary()?;
 
                     expression = Box::new(
                         Binary::new(
@@ -150,6 +174,43 @@ impl<'a> Parser<'a> {
                 },
                 _ => break
             }
+        }
+
+        Ok(expression)
+    }
+
+    fn ternary(&mut self) -> Result<Box<dyn Expression>, Error> {
+        let mut expression = self.unary()?;
+
+        let token = self.tokens.current();
+        if let Some(Query) = token.as_ref().map(Token::token_type) {
+            let operator = token.unwrap();
+            self.tokens.next()?;
+            let second = self.expression()?;
+            let token = self.tokens.current();
+            match token.as_ref().map(Token::token_type) {
+                Some(Colon) => {},
+                _ => return Err(
+                    Error::new(
+                        ErrorKind::ParserError {
+                            message: "Expected \":\" after first expression".into(),
+                            token,
+                        }
+                    )
+                )
+            }
+            self.tokens.next()?;
+            let third = self.expression()?;
+            
+
+            expression = Box::new(
+                Ternary::new(
+                    operator,
+                    expression,
+                    second,
+                    third
+                )
+            );
         }
 
         Ok(expression)
@@ -183,6 +244,8 @@ impl<'a> Parser<'a> {
             Some(LeftParen) => {
                 let expression = self.expression()?;
                 let token = self.tokens.current();
+
+                self.tokens.next()?;
 
                 match token.as_ref().map(Token::token_type) {
                     Some(RightParen) => Ok(Box::new(Grouping::new(expression))),

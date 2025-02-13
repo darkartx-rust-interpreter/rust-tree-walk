@@ -97,11 +97,42 @@ impl Expression for Unary {
     }
 }
 
+#[derive(Debug)]
+pub struct Ternary {
+    operator: Token,
+    first: Box<dyn Expression>,
+    second: Box<dyn Expression>,
+    third: Box<dyn Expression>
+}
+
+impl Ternary {
+    pub fn new(
+        operator: Token,
+        first: Box<dyn Expression>,
+        second: Box<dyn Expression>,
+        third: Box<dyn Expression>
+    ) -> Self {
+        Self {
+            operator,
+            first,
+            second,
+            third
+        }
+    }
+}
+
+impl Expression for Ternary {
+    fn accept(&self, visitor: &mut dyn Visitor) {
+        visitor.visit_ternary(self);
+    }
+}
+
 pub trait Visitor: fmt::Debug {
     fn visit_binary(&mut self, expression: &Binary);
     fn visit_grouping(&mut self, expression: &Grouping);
     fn visit_literal(&mut self, expression: &Literal);
     fn visit_unary(&mut self, expression: &Unary);
+    fn visit_ternary(&mut self, expression: &Ternary);
 }
 
 #[derive(Debug)]
@@ -140,5 +171,15 @@ impl Visitor for Printer {
         print!("({} ", expression.operator);
         expression.right.accept(self);
         print!(")")
+    }
+    
+    fn visit_ternary(&mut self, expression: &Ternary) {
+        print!("({} ", expression.operator);
+        expression.first.accept(self);
+        print!(" ");
+        expression.second.accept(self);
+        print!(" ");
+        expression.third.accept(self);
+        print!(")");
     }
 }
