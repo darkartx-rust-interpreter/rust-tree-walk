@@ -11,6 +11,9 @@ pub(super) enum ErrorKind {
     ParserError {
         token: Option<Token>,
         message: String
+    },
+    RuntimeError {
+        message: String
     }
 }
 
@@ -40,6 +43,9 @@ impl fmt::Display for Error {
                     Some(token) => write!(f, "Error: {message} at \'{}\' in {}", token, token.line()),
                     None => write!(f, "Error: {message}")
                 }
+            },
+            RuntimeError { message } => {
+                write!(f, "Error: {message}")
             }
         }
     }

@@ -19,7 +19,8 @@ use super::{
     token::{Token, TokenType},
     ast::{Expression, Literal, Grouping, Unary, Binary, Ternary},
     error::{Error, ErrorKind},
-    value::Value
+    value::Value,
+    utils::parse_number
 };
 
 use TokenType::*;
@@ -334,7 +335,7 @@ fn parse_value(token: Token) -> Result<Value, Error> {
 
     let value = match token.token_type() {
         Number => {
-            match value.parse::<f64>() {
+            match parse_number(value) {
                 Ok(value) => Value::Number(value),
                 Err(err) => return Err(
                     Error::new(

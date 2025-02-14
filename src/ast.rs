@@ -1,4 +1,4 @@
-use std::{fmt, convert};
+use std::fmt;
 
 use super::{
     token::Token,
@@ -7,12 +7,6 @@ use super::{
 
 pub trait Expression: fmt::Debug {
     fn accept(&self, visitor: &mut dyn Visitor);
-}
-
-impl<T: Expression + 'static> convert::From<T> for Box<dyn Expression> {
-    fn from(value: T) -> Self {
-        Box::new(value)
-    }
 }
 
 #[derive(Debug)]
@@ -29,6 +23,18 @@ impl Binary {
             operator,
             right
         }
+    }
+
+    pub fn left(&self) -> &dyn Expression {
+        self.left.as_ref()
+    }
+
+    pub fn operator(&self) -> &Token {
+        &self.operator
+    }
+
+    pub fn right(&self) -> &dyn Expression {
+        self.right.as_ref()
     }
 }
 
@@ -49,6 +55,10 @@ impl Grouping {
             expression
         }
     }
+
+    pub fn expression(&self) -> &dyn Expression {
+        self.expression.as_ref()
+    }
 }
 
 impl Expression for Grouping {
@@ -67,6 +77,10 @@ impl Literal {
         Self {
             value
         }
+    }
+
+    pub fn value(&self) -> &Value {
+        &self.value
     }
 }
 
@@ -88,6 +102,14 @@ impl Unary {
             operator,
             right
         }
+    }
+
+    pub fn operator(&self) -> &Token {
+        &self.operator
+    }
+
+    pub fn right(&self) -> &dyn Expression {
+        self.right.as_ref()
     }
 }
 
@@ -118,6 +140,22 @@ impl Ternary {
             second,
             third
         }
+    }
+
+    pub fn operator(&self) -> &Token {
+        &self.operator
+    }
+
+    pub fn first(&self) -> &dyn Expression {
+        self.first.as_ref()
+    }
+
+    pub fn second(&self) -> &dyn Expression {
+        self.second.as_ref()
+    }
+
+    pub fn third(&self) -> &dyn Expression {
+        self.third.as_ref()
     }
 }
 
