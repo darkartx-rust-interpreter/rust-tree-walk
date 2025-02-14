@@ -6,7 +6,11 @@ use super::{
 };
 
 pub trait Expression: fmt::Debug {
-    fn accept(&self, visitor: &mut dyn Visitor);
+    fn accept(&self, visitor: &mut dyn ExpressionVisitor);
+
+    fn as_variable(&self) -> Option<&Variable> {
+        None
+    }
 }
 
 #[derive(Debug)]
@@ -39,7 +43,7 @@ impl Binary {
 }
 
 impl Expression for Binary {
-    fn accept(&self, visitor: &mut dyn Visitor) {
+    fn accept(&self, visitor: &mut dyn ExpressionVisitor) {
         visitor.visit_binary(self);
     }
 }
@@ -62,7 +66,7 @@ impl Grouping {
 }
 
 impl Expression for Grouping {
-    fn accept(&self, visitor: &mut dyn Visitor) {
+    fn accept(&self, visitor: &mut dyn ExpressionVisitor) {
         visitor.visit_grouping(self);
     }
 }
@@ -85,7 +89,7 @@ impl Literal {
 }
 
 impl Expression for Literal {
-    fn accept(&self, visitor: &mut dyn Visitor) {
+    fn accept(&self, visitor: &mut dyn ExpressionVisitor) {
         visitor.visit_literal(self);
     }
 }
@@ -114,7 +118,7 @@ impl Unary {
 }
 
 impl Expression for Unary {
-    fn accept(&self, visitor: &mut dyn Visitor) {
+    fn accept(&self, visitor: &mut dyn ExpressionVisitor) {
         visitor.visit_unary(self);
     }
 }
@@ -160,17 +164,75 @@ impl Ternary {
 }
 
 impl Expression for Ternary {
-    fn accept(&self, visitor: &mut dyn Visitor) {
+    fn accept(&self, visitor: &mut dyn ExpressionVisitor) {
         visitor.visit_ternary(self);
     }
 }
 
-pub trait Visitor: fmt::Debug {
+#[derive(Debug)]
+pub struct Variable {
+    name: String
+}
+
+impl Variable {
+    pub fn new(name: String) -> Self {
+        Self {
+            name
+        }
+    }
+
+    pub fn name(&self) -> &String {
+        &self.name
+    }
+}
+
+impl Expression for Variable {
+    fn accept(&self, visitor: &mut dyn ExpressionVisitor) {
+        visitor.visit_variable(self);
+    }
+
+    fn as_variable(&self) -> Option<&Variable> {
+        Some(self)
+    }
+}
+
+#[derive(Debug)]
+pub struct Assign {
+    name: String,
+    value: Box<dyn Expression>
+}
+
+impl Assign {
+    pub fn new(name: String, value: Box<dyn Expression>) -> Self {
+        Self {
+            name,
+            value
+        }
+    }
+
+    pub fn name(&self) -> &String {
+        &self.name
+    }
+
+    pub fn value(&self) -> &dyn Expression {
+        self.value.as_ref()
+    }
+}
+
+impl Expression for Assign {
+    fn accept(&self, visitor: &mut dyn ExpressionVisitor) {
+        visitor.visit_assign(self);
+    }
+}
+
+pub trait ExpressionVisitor: fmt::Debug {
     fn visit_binary(&mut self, expression: &Binary);
     fn visit_grouping(&mut self, expression: &Grouping);
     fn visit_literal(&mut self, expression: &Literal);
     fn visit_unary(&mut self, expression: &Unary);
     fn visit_ternary(&mut self, expression: &Ternary);
+    fn visit_variable(&mut self, expression: &Variable);
+    fn visit_assign(&mut self, expression: &Assign);
 }
 
 #[derive(Debug)]
@@ -186,7 +248,7 @@ impl Printer {
     }
 }
 
-impl Visitor for Printer {
+impl ExpressionVisitor for Printer {
     fn visit_binary(&mut self, expression: &Binary) {
         print!("({} ", expression.operator);
         expression.left.accept(self);
@@ -220,4 +282,99 @@ impl Visitor for Printer {
         expression.third.accept(self);
         print!(")");
     }
+    
+    fn visit_variable(&mut self, expression: &Variable) {
+        print!("(variable \"{}\")", expression.name);
+    }
+    
+    fn visit_assign(&mut self, expression: &Assign) {
+        print!("(assign \"{}\" ", expression.name);
+        expression.value.accept(self);
+        print!(")");
+    }
+}
+
+pub trait Statement: fmt::Debug {
+    fn accept(&self, visitor: &mut dyn StatementVisitor);
+}
+
+#[derive(Debug)]
+pub struct ExpressionStatement {
+    expression: Box<dyn Expression>,
+}
+
+impl ExpressionStatement {
+    pub fn new(expression: Box<dyn Expression>) -> Self {
+        Self {
+            expression
+        }
+    }
+
+    pub fn expression(&self) -> &dyn Expression {
+        self.expression.as_ref()
+    }
+}
+
+impl Statement for ExpressionStatement {
+    fn accept(&self, visitor: &mut dyn StatementVisitor) {
+        visitor.visit_expression_statement(self);
+    }
+}
+
+#[derive(Debug)]
+pub struct Print {
+    expression: Box<dyn Expression>,
+}
+
+impl Print {
+    pub fn new(expression: Box<dyn Expression>) -> Self {
+        Self {
+            expression
+        }
+    }
+
+    pub fn expression(&self) -> &dyn Expression {
+        self.expression.as_ref()
+    }
+}
+
+impl Statement for Print {
+    fn accept(&self, visitor: &mut dyn StatementVisitor) {
+        visitor.visit_print(self);
+    }
+}
+
+#[derive(Debug)]
+pub struct Var {
+    name: String,
+    right: Box<dyn Expression>
+}
+
+impl Var {
+    pub fn new(name: String, right: Box<dyn Expression>) -> Self {
+        Self {
+            name,
+            right
+        }
+    }
+
+    pub fn name(&self) -> &String {
+        &self.name
+    }
+
+    pub fn right(&self) -> &dyn Expression {
+        self.right.as_ref()
+    }
+}
+
+impl Statement for Var {
+    fn accept(&self, visitor: &mut dyn StatementVisitor) {
+        visitor.visit_var(self);
+    }
+}
+
+pub trait StatementVisitor: fmt::Debug {
+    fn visit_expression_statement(&mut self, statement: &ExpressionStatement);
+    fn visit_print(&mut self, statement: &Print);
+    fn visit_var(&mut self, statement: &Var);
 }

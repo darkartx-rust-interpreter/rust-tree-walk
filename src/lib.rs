@@ -6,6 +6,7 @@ pub mod ast;
 pub mod parser;
 pub mod value;
 pub mod utils;
+pub mod environment;
 
 pub use interpreter::Interpreter;
 pub use scanner::Scanner;

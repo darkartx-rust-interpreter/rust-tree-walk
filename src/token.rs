@@ -1,6 +1,6 @@
 use std::fmt;
 
-#[derive(Debug, Copy, Clone)]
+#[derive(Debug, Copy, Clone, PartialEq)]
 pub enum TokenType {
     LeftParen,
     RightParen,
@@ -177,6 +177,40 @@ impl fmt::Display for Token {
                 write!(f, "{}", iden)
             }
         }
+    }
+}
+
+pub trait TokenOption {
+    fn token_type(&self) -> Option<TokenType>;
+    fn lexeme(&self) -> Option<&str>;
+    fn line(&self) -> Option<usize>;
+}
+
+impl TokenOption for Option<Token> {
+    fn token_type(&self) -> Option<TokenType> {
+        self.as_ref().map(Token::token_type)
+    }
+
+    fn lexeme(&self) -> Option<&str> {
+        self.as_ref().map(Token::lexeme).flatten()
+    }
+
+    fn line(&self) -> Option<usize> {
+        self.as_ref().map(Token::line)
+    }
+}
+
+impl TokenOption for Option<&Token> {
+    fn token_type(&self) -> Option<TokenType> {
+        self.map(Token::token_type)
+    }
+
+    fn lexeme(&self) -> Option<&str> {
+        self.map(Token::lexeme).flatten()
+    }
+
+    fn line(&self) -> Option<usize> {
+        self.map(Token::line)
     }
 }
 

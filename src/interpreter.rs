@@ -1,14 +1,33 @@
+use crate::value;
+
 use super::{
     scanner::Scanner,
     error::{Error, ErrorKind},
     parser::Parser,
     value::Value,
-    ast::{Visitor, Binary, Grouping, Expression, Literal, Unary, Ternary},
-    token::TokenType
+    ast::{
+        ExpressionVisitor,
+        StatementVisitor,
+        Binary,
+        Grouping,
+        Expression,
+        Literal,
+        Unary,
+        Ternary,
+        ExpressionStatement,
+        Print,
+        Statement,
+        Variable,
+        Var,
+        Assign
+    },
+    token::TokenType,
+    environment::Environment
 };
 
 #[derive(Debug)]
 pub struct Interpreter {
+    environment: Environment,
     stack: Vec<Value>,
     error: Option<Error>,
 }
@@ -16,6 +35,7 @@ pub struct Interpreter {
 impl Interpreter {
     pub fn new() -> Self {
         Self {
+            environment: Environment::new(),
             stack: Vec::new(),
             error: None
         }
@@ -25,11 +45,11 @@ impl Interpreter {
         let scanner = Scanner::from_str(code);
         let mut tokens = scanner.tokens();
         let mut parser = Parser::new(&mut tokens);
-        let expression = parser.parse()?;
+        let statements = parser.parse()?;
 
-        let value = self.evaluate_expression(expression.as_ref())?;
-
-        println!("{}", value);
+        for statement in statements {
+            self.evaluate_statement(statement.as_ref())?;
+        }
 
         Ok(())
     }
@@ -44,6 +64,13 @@ impl Interpreter {
 
     fn push_to_stack(&mut self, value: Value) {
         self.stack.push(value);
+    }
+
+    fn evaluate_statement(&mut self, statement: &dyn Statement) -> Result<(), Error> {
+        statement.accept(self);
+        self.handle_error()?;
+
+        Ok(())
     }
 
     fn evaluate_expression(&mut self, expression: &dyn Expression) -> Result<Value, Error> {
@@ -133,7 +160,7 @@ impl Interpreter {
     }
 }
 
-impl Visitor for Interpreter {
+impl ExpressionVisitor for Interpreter {
     fn visit_binary(&mut self, expression: &Binary) {
         let result = self.evaluate_binary(expression);
 
@@ -176,6 +203,75 @@ impl Visitor for Interpreter {
 
         match result {
             Ok(value) => self.push_to_stack(value),
+            Err(error) => {
+                self.error = Some(error)
+            }
+        }
+    }
+    
+    fn visit_variable(&mut self, expression: &Variable) {
+        let result = self.environment.get(expression.name());
+
+        match result {
+            Ok(value) => {
+                let value = value.clone();
+                self.push_to_stack(value)
+            },
+            Err(error) => {
+                self.error = Some(error)
+            }
+        }
+    }
+    
+    fn visit_assign(&mut self, expression: &Assign) {
+        let result = self.evaluate_expression(expression.value());
+
+        let value = match result {
+            Ok(value) => value,
+            Err(error) => {
+                self.error = Some(error);
+                return;
+            }
+        };
+
+        let result = self.environment.assign(expression.name().clone(), value);
+
+        if let Err(error) = result {
+            self.error = Some(error)
+        }
+    }
+}
+
+impl StatementVisitor for Interpreter {
+    fn visit_expression_statement(&mut self, statement: &ExpressionStatement) {
+        let result = self.evaluate_expression(statement.expression());
+
+        match result {
+            Ok(_value) => {},
+            Err(error) => {
+                self.error = Some(error)
+            }
+        }
+    }
+
+    fn visit_print(&mut self, statement: &Print) {
+        let result = self.evaluate_expression(statement.expression());
+
+        match result {
+            Ok(value) => println!("{}", value),
+            Err(error) => {
+                self.error = Some(error)
+            }
+        }
+    }
+    
+    fn visit_var(&mut self, statement: &Var) {
+        let result = self.evaluate_expression(statement.right());
+
+        match result {
+            Ok(value) => {
+                self.environment.define(statement.name().clone(), value);
+            },
             Err(error) => {
                 self.error = Some(error)
             }

@@ -15,9 +15,24 @@ primary        → NUMBER | STRING | "true" | "false" | "nil"
 
 use std::iter;
 
+use crate::token::TokenOption;
+
 use super::{
     token::{Token, TokenType},
-    ast::{Expression, Literal, Grouping, Unary, Binary, Ternary},
+    ast::{
+        Expression,
+        Literal,
+        Grouping,
+        Unary,
+        Binary,
+        Ternary,
+        Statement,
+        Print,
+        ExpressionStatement,
+        Var,
+        Variable,
+        Assign
+    },
     error::{Error, ErrorKind},
     value::Value,
     utils::parse_number
@@ -40,32 +55,114 @@ impl<'a> Parser<'a> {
         }
     }
 
-    pub fn parse(&mut self) -> Result<Box<dyn Expression>, Error> {
+    pub fn parse(&mut self) -> Result<Vec<Box<dyn Statement>>, Error> {
         self.tokens.next()?;
-        self.expression()
-    }
-
-    fn expression(&mut self) -> Result<Box<dyn Expression>, Error> {
-        let mut expression = self.equaity()?;
+        let mut result = Vec::new();
 
         loop {
             let token = self.tokens.current();
 
-            match token.as_ref().map(Token::token_type) {
-                Some(Comma) => {
-                    let operator = token.unwrap();
-                    self.tokens.next()?;
-                    let right = self.equaity()?;
+            if token.is_some() {
+                result.push(self.declaration()?);
+            } else {
+                break;
+            }
+        }
+
+        Ok(result)
+    }
+
+    fn declaration(&mut self) -> Result<Box<dyn Statement>, Error> {
+        if self.tokens.token_match(&[Var]) {
+            self.tokens.next()?;
+            self.var_declaration()
+        } else {
+            self.statement()
+        }
+    }
+
+    fn var_declaration(&mut self) -> Result<Box<dyn Statement>, Error> {
+        let token = self.tokens.consume(&[Identifier], "Expect variable name")?;
+
+        let name = token.lexeme().unwrap().into();
+        let initializer = if let Some(Equal) = self.tokens.current().token_type() {
+            self.tokens.next()?;
+            self.expression()?
+        } else {
+            Box::new(Literal::new(Value::Null))
+        };
+
+        self.tokens.consume(&[Semicolon], "Expect \";\" after expression")?;
+
+
+        Ok(Box::new(Var::new(name, initializer)))
+    }
+
+    fn statement(&mut self) -> Result<Box<dyn Statement>, Error> {
+        if self.tokens.token_match(&[Print]) {
+            self.tokens.next()?;
+            self.print_statement()
+        } else {
+            self.expression_statement()
+        }
+    }
+
+    fn print_statement(&mut self) -> Result<Box<dyn Statement>, Error> {
+        let expression = self.expression()?;
+        self.tokens.consume(&[Semicolon], "Expect \";\" after value")?;
+
+        Ok(Box::new(Print::new(expression)))
+    }
+
+    fn expression_statement(&mut self) -> Result<Box<dyn Statement>, Error> {
+        let expression = self.expression()?;
+        self.tokens.consume(&[Semicolon], "Expect \";\" after expression")?;
+
+        Ok(Box::new(ExpressionStatement::new(expression)))
+    }
+
+    fn expression(&mut self) -> Result<Box<dyn Expression>, Error> {
+        let mut expression = self.assignment()?;
+
+        while self.tokens.token_match(&[Comma]) {
+            let operator = self.tokens.next()?.unwrap();
+            let right = self.assignment()?;
         
-                    expression = Box::new(
-                        Binary::new(
-                            expression,
-                            operator,
-                            right
-                        )
-                    );
+            expression = Box::new(
+                Binary::new(
+                    expression,
+                    operator,
+                    right
+                )
+            );
+        }
+
+        Ok(expression)
+    }
+
+    fn assignment(&mut self) -> Result<Box<dyn Expression>, Error> {
+        let expression = self.equaity()?;
+
+        if self.tokens.token_match(&[Equal]) {
+            let token = self.tokens.next()?;
+
+            match expression.as_variable() {
+                Some(variable) => {
+                    let name = variable.name().clone();
+                    let value = self.assignment()?;
+
+                    return Ok(Box::new(Assign::new(name, value)))
                 },
-                _ => break
+                None => {
+                    return Err(
+                        Error::new(
+                            ErrorKind::ParserError {
+                                token,
+                                message: "Invalid assignment target".into()
+                            }
+                        )
+                    )
+                }
             }
         }
 
@@ -75,25 +172,17 @@ impl<'a> Parser<'a> {
     fn equaity(&mut self) -> Result<Box<dyn Expression>, Error> {
         let mut expression = self.comparison()?;
 
-        loop {
-            let token = self.tokens.current();
+        while self.tokens.token_match(&[BangEqual, EqualEqual]) {
+            let operator = self.tokens.next()?.unwrap();
+            let right = self.comparison()?;
 
-            match token.as_ref().map(Token::token_type) {
-                Some(BangEqual | EqualEqual) => {
-                    let operator = token.unwrap();
-                    self.tokens.next()?;
-                    let right = self.comparison()?;
-        
-                    expression = Box::new(
-                        Binary::new(
-                            expression,
-                            operator,
-                            right
-                        )
-                    );
-                },
-                _ => break
-            }
+            expression = Box::new(
+                Binary::new(
+                    expression,
+                    operator,
+                    right
+                )
+            );
         }
 
         Ok(expression)
@@ -102,25 +191,17 @@ impl<'a> Parser<'a> {
     fn comparison(&mut self) -> Result<Box<dyn Expression>, Error> {
         let mut expression = self.term()?;
 
-        loop {
-            let token = self.tokens.current();
+        while self.tokens.token_match(&[Greater, GreaterEqual, Less, LessEqual]) {
+            let operator = self.tokens.next()?.unwrap();
+            let right = self.term()?;
 
-            match token.as_ref().map(Token::token_type) {
-                Some(Greater | GreaterEqual | Less | LessEqual) => {
-                    let operator = token.unwrap();
-                    self.tokens.next()?;
-                    let right = self.term()?;
-
-                    expression = Box::new(
-                        Binary::new(
-                            expression,
-                            operator,
-                            right
-                        )
-                    );
-                },
-                _ => break
-            }
+            expression = Box::new(
+                Binary::new(
+                    expression,
+                    operator,
+                    right
+                )
+            );
         }
 
         Ok(expression)
@@ -129,25 +210,17 @@ impl<'a> Parser<'a> {
     fn term(&mut self) -> Result<Box<dyn Expression>, Error> {
         let mut expression = self.factor()?;
 
-        loop {
-            let token = self.tokens.current();
+        while self.tokens.token_match(&[Minus, Plus]) {
+            let operator = self.tokens.next()?.unwrap();
+            let right = self.factor()?;
 
-            match token.as_ref().map(Token::token_type) {
-                Some(Minus | Plus) => {
-                    let operator = token.unwrap();
-                    self.tokens.next()?;
-                    let right = self.factor()?;
-
-                    expression = Box::new(
-                        Binary::new(
-                            expression,
-                            operator,
-                            right
-                        )
-                    );
-                },
-                _ => break
-            }
+            expression = Box::new(
+                Binary::new(
+                    expression,
+                    operator,
+                    right
+                )
+            );
         }
 
         Ok(expression)
@@ -156,25 +229,17 @@ impl<'a> Parser<'a> {
     fn factor(&mut self) -> Result<Box<dyn Expression>, Error> {
         let mut expression = self.ternary()?;
 
-        loop {
-            let token = self.tokens.current();
+        while self.tokens.token_match(&[Slash, Star]) {
+            let operator = self.tokens.next()?.unwrap();
+            let right = self.ternary()?;
 
-            match token.as_ref().map(Token::token_type) {
-                Some(Slash | Star) => {
-                    let operator = token.unwrap();
-                    self.tokens.next()?;
-                    let right = self.ternary()?;
-
-                    expression = Box::new(
-                        Binary::new(
-                            expression,
-                            operator,
-                            right
-                        )
-                    );
-                },
-                _ => break
-            }
+            expression = Box::new(
+                Binary::new(
+                    expression,
+                    operator,
+                    right
+                )
+            );
         }
 
         Ok(expression)
@@ -183,26 +248,11 @@ impl<'a> Parser<'a> {
     fn ternary(&mut self) -> Result<Box<dyn Expression>, Error> {
         let mut expression = self.unary()?;
 
-        let token = self.tokens.current();
-        if let Some(Query) = token.as_ref().map(Token::token_type) {
-            let operator = token.unwrap();
-            self.tokens.next()?;
+        if self.tokens.token_match(&[Query]) {
+            let operator = self.tokens.next()?.unwrap();
             let second = self.expression()?;
-            let token = self.tokens.current();
-            match token.as_ref().map(Token::token_type) {
-                Some(Colon) => {},
-                _ => return Err(
-                    Error::new(
-                        ErrorKind::ParserError {
-                            message: "Expected \":\" after first expression".into(),
-                            token,
-                        }
-                    )
-                )
-            }
-            self.tokens.next()?;
+            self.tokens.consume(&[Colon], "Expected \":\" after first expression")?;
             let third = self.expression()?;
-            
 
             expression = Box::new(
                 Ternary::new(
@@ -218,47 +268,30 @@ impl<'a> Parser<'a> {
     }
 
     fn unary(&mut self) -> Result<Box<dyn Expression>, Error> {
-        let token = self.tokens.current();
+        if self.tokens.token_match(&[Bang, Minus]) {
+            let operator = self.tokens.next()?.unwrap();
+            let right = self.unary()?;
 
-        match token.as_ref().map(Token::token_type) {
-            Some(Bang | Minus) => {
-                let operator = token.unwrap();
-                self.tokens.next()?;
-                let right = self.unary()?;
-
-                Ok(Box::new(Unary::new(operator, right)))
-            },
-            _ => self.primary()
+            Ok(Box::new(Unary::new(operator, right)))
+        } else {
+            self.primary()
         }
     }
 
     fn primary(&mut self) -> Result<Box<dyn Expression>, Error> {
-        let token = self.tokens.current();
+        let token = self.tokens.next()?;
 
-        self.tokens.next()?;
-
-        match token.as_ref().map(Token::token_type) {
+        match token.token_type() {
             Some(False) => Ok(Box::new(Literal::new(Value::False))),
             Some(True) => Ok(Box::new(Literal::new(Value::True))),
             Some(Null) => Ok(Box::new(Literal::new(Value::Null))),
             Some(Number | String) => Ok(Box::new(Literal::new(parse_value(token.unwrap())?))),
+            Some(Identifier) => Ok(Box::new(Variable::new(token.lexeme().unwrap().into()))),
             Some(LeftParen) => {
                 let expression = self.expression()?;
-                let token = self.tokens.current();
+                self.tokens.consume(&[RightParen], "Expect \")\" after expression")?;
 
-                self.tokens.next()?;
-
-                match token.as_ref().map(Token::token_type) {
-                    Some(RightParen) => Ok(Box::new(Grouping::new(expression))),
-                    _ => Err(
-                        Error::new(
-                            ErrorKind::ParserError {
-                                token: Some(token.unwrap().clone()),
-                                message: format!("Expect \")\" after expression")
-                            }
-                        )
-                    )
-                }
+                Ok(Box::new(Grouping::new(expression)))
             },
             Some(_) => {
                 let token = token.unwrap();
@@ -266,8 +299,8 @@ impl<'a> Parser<'a> {
                 Err(
                     Error::new(
                         ErrorKind::ParserError {
-                            token: Some(token.clone()),
-                            message: format!("Unexpeceted token \"{token}\"")
+                            message: format!("Unexpeceted token \"{token}\""),
+                            token: Some(token)
                         }
                     )
                 )
@@ -298,13 +331,56 @@ impl<'a> Tokens<'a> {
     }
 
     fn next(&mut self) -> Result<Option<Token>, Error> {
+        let current = self.current.take();
         let token = self.inner.next().transpose()?;
         self.current = token;
-        Ok(self.current())
+        Ok(current)
     }
 
-    fn current(&mut self) -> Option<Token> {
-        self.current.as_ref().map(|t| t.clone())
+    fn current(&mut self) -> Option<&Token> {
+        self.current.as_ref()
+    }
+
+    fn consume(&mut self, variants: &[TokenType], err_message: &str) -> Result<Token, Error> {
+        let token = self.next()?;
+
+        let token = if let Some(token) = token { token } else {
+            return Err(
+                Error::new(
+                    ErrorKind::ParserError {
+                        token,
+                        message: err_message.into()
+                    }
+                )
+            );
+        };
+
+        let matched = variants.iter().any(|v| *v == token.token_type());
+
+        if matched {
+            Ok(token)
+        } else {
+            Err(
+                Error::new(
+                    ErrorKind::ParserError {
+                        token: Some(token),
+                        message: err_message.into()
+                    }
+                )
+            )
+        }
+    }
+
+    fn token_match(&self, variants: &[TokenType]) -> bool {
+        let token = self.current.as_ref();
+
+        if token.is_none() {
+            return false;
+        }
+
+        let token = token.unwrap();
+
+        variants.iter().any(|v| *v == token.token_type())
     }
 }
 
