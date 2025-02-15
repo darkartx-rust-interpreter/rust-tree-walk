@@ -31,7 +31,8 @@ use super::{
         ExpressionStatement,
         Var,
         Variable,
-        Assign
+        Assign,
+        Block
     },
     error::{Error, ErrorKind},
     value::Value,
@@ -101,10 +102,27 @@ impl<'a> Parser<'a> {
     fn statement(&mut self) -> Result<Box<dyn Statement>, Error> {
         if self.tokens.token_match(&[Print]) {
             self.tokens.next()?;
-            self.print_statement()
-        } else {
-            self.expression_statement()
+            return self.print_statement();
         }
+
+        if self.tokens.token_match(&[LeftBrace]) {
+            self.tokens.next()?;
+            return self.block();
+        }
+        
+        self.expression_statement()
+    }
+
+    fn block(&mut self) -> Result<Box<dyn Statement>, Error> {
+        let mut statements = Vec::new();
+
+        while !self.tokens.token_match(&[RightBrace]) {
+            statements.push(self.declaration()?);
+        }
+
+        self.tokens.consume(&[RightBrace], "Expect \"}\" after block")?;
+
+        Ok(Box::new(Block::new(statements)))
     }
 
     fn print_statement(&mut self) -> Result<Box<dyn Statement>, Error> {

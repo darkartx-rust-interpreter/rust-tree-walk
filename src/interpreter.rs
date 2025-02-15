@@ -1,5 +1,3 @@
-use crate::value;
-
 use super::{
     scanner::Scanner,
     error::{Error, ErrorKind},
@@ -19,7 +17,8 @@ use super::{
         Statement,
         Variable,
         Var,
-        Assign
+        Assign,
+        Block
     },
     token::TokenType,
     environment::Environment
@@ -27,7 +26,7 @@ use super::{
 
 #[derive(Debug)]
 pub struct Interpreter {
-    environment: Environment,
+    environment: Option<Box<Environment>>,
     stack: Vec<Value>,
     error: Option<Error>,
 }
@@ -35,7 +34,7 @@ pub struct Interpreter {
 impl Interpreter {
     pub fn new() -> Self {
         Self {
-            environment: Environment::new(),
+            environment: Some(Box::new(Environment::new(None))),
             stack: Vec::new(),
             error: None
         }
@@ -210,7 +209,7 @@ impl ExpressionVisitor for Interpreter {
     }
     
     fn visit_variable(&mut self, expression: &Variable) {
-        let result = self.environment.get(expression.name());
+        let result = self.environment.as_ref().unwrap().get(expression.name());
 
         match result {
             Ok(value) => {
@@ -234,11 +233,13 @@ impl ExpressionVisitor for Interpreter {
             }
         };
 
-        let result = self.environment.assign(expression.name().clone(), value);
+        let result = self.environment.as_mut().unwrap().assign(expression.name().clone(), value.clone());
 
         if let Err(error) = result {
             self.error = Some(error)
         }
+
+        self.push_to_stack(value);
     }
 }
 
@@ -270,11 +271,31 @@ impl StatementVisitor for Interpreter {
 
         match result {
             Ok(value) => {
-                self.environment.define(statement.name().clone(), value);
+                self.environment.as_mut().unwrap().define(statement.name().clone(), value);
             },
             Err(error) => {
                 self.error = Some(error)
             }
         }
+    }
+    
+    fn visit_block(&mut self, statement: &Block) {
+        let previous_env = self.environment.take().unwrap();
+        self.environment = Some(Box::new(Environment::new(Some(previous_env))));
+
+        let mut error = None;
+
+        for statement in statement.statements() {
+            match self.evaluate_statement(statement.as_ref()) {
+                Ok(_) => {},
+                Err(err) => {
+                    error = Some(err);
+                    break;
+                }
+            }
+        }
+
+        self.environment = self.environment.take().unwrap().enclosing();
+        self.error = error;
     }
 }

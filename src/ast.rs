@@ -373,8 +373,32 @@ impl Statement for Var {
     }
 }
 
+#[derive(Debug)]
+pub struct Block {
+    statements: Vec<Box<dyn Statement>>,
+}
+
+impl Block {
+    pub fn new(statements: Vec<Box<dyn Statement>>) -> Self {
+        Self {
+            statements
+        }
+    }
+
+    pub fn statements(&self) -> &[Box<dyn Statement>] {
+        self.statements.as_ref()
+    }
+}
+
+impl Statement for Block {
+    fn accept(&self, visitor: &mut dyn StatementVisitor) {
+        visitor.visit_block(self);
+    }
+}
+
 pub trait StatementVisitor: fmt::Debug {
     fn visit_expression_statement(&mut self, statement: &ExpressionStatement);
     fn visit_print(&mut self, statement: &Print);
     fn visit_var(&mut self, statement: &Var);
+    fn visit_block(&mut self, statement: &Block);
 }
