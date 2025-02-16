@@ -225,6 +225,41 @@ impl Expression for Assign {
     }
 }
 
+#[derive(Debug)]
+pub struct Logical {
+    left: Box<dyn Expression>,
+    operator: Token,
+    right: Box<dyn Expression>
+}
+
+impl Logical {
+    pub fn new(left: Box<dyn Expression>, operator: Token, right: Box<dyn Expression>) -> Self {
+        Self {
+            left,
+            operator,
+            right
+        }
+    }
+
+    pub fn left(&self) -> &dyn Expression {
+        self.left.as_ref()
+    }
+
+    pub fn operator(&self) -> &Token {
+        &self.operator
+    }
+
+    pub fn right(&self) -> &dyn Expression {
+        self.right.as_ref()
+    }
+}
+
+impl Expression for Logical {
+    fn accept(&self, visitor: &mut dyn ExpressionVisitor) {
+        visitor.visit_logical(self);
+    }
+}
+
 pub trait ExpressionVisitor: fmt::Debug {
     fn visit_binary(&mut self, expression: &Binary);
     fn visit_grouping(&mut self, expression: &Grouping);
@@ -233,6 +268,7 @@ pub trait ExpressionVisitor: fmt::Debug {
     fn visit_ternary(&mut self, expression: &Ternary);
     fn visit_variable(&mut self, expression: &Variable);
     fn visit_assign(&mut self, expression: &Assign);
+    fn visit_logical(&mut self, expression: &Logical);
 }
 
 #[derive(Debug)]
@@ -290,6 +326,14 @@ impl ExpressionVisitor for Printer {
     fn visit_assign(&mut self, expression: &Assign) {
         print!("(assign \"{}\" ", expression.name);
         expression.value.accept(self);
+        print!(")");
+    }
+    
+    fn visit_logical(&mut self, expression: &Logical) {
+        print!("({} ", expression.operator);
+        expression.left.accept(self);
+        print!(" ");
+        expression.right.accept(self);
         print!(")");
     }
 }
@@ -396,9 +440,75 @@ impl Statement for Block {
     }
 }
 
+#[derive(Debug)]
+pub struct If {
+    condition: Box<dyn Expression>,
+    then_branch: Box<dyn Statement>,
+    else_branch: Option<Box<dyn Statement>>
+}
+
+impl If {
+    pub fn new(condition: Box<dyn Expression>, then_branch: Box<dyn Statement>, else_branch: Option<Box<dyn Statement>>) -> Self {
+        Self {
+            condition,
+            then_branch,
+            else_branch
+        }
+    }
+
+    pub fn condition(&self) -> &dyn Expression {
+        self.condition.as_ref()
+    }
+
+    pub fn then_branch(&self) -> &dyn Statement {
+        self.then_branch.as_ref()
+    }
+
+    pub fn else_branch(&self) -> Option<&dyn Statement> {
+        self.else_branch.as_ref().map(Box::as_ref)
+    }
+}
+
+impl Statement for If {
+    fn accept(&self, visitor: &mut dyn StatementVisitor) {
+        visitor.visit_if(self);
+    }
+}
+
+#[derive(Debug)]
+pub struct While {
+    condition: Box<dyn Expression>,
+    body: Box<dyn Statement>
+}
+
+impl While {
+    pub fn new(condition: Box<dyn Expression>, body: Box<dyn Statement>) -> Self {
+        Self {
+            condition,
+            body
+        }
+    }
+
+    pub fn condition(&self) -> &dyn Expression {
+        self.condition.as_ref()
+    }
+
+    pub fn body(&self) -> &dyn Statement {
+        self.body.as_ref()
+    }
+}
+
+impl Statement for While {
+    fn accept(&self, visitor: &mut dyn StatementVisitor) {
+        visitor.visit_while(self);
+    }
+}
+
 pub trait StatementVisitor: fmt::Debug {
     fn visit_expression_statement(&mut self, statement: &ExpressionStatement);
     fn visit_print(&mut self, statement: &Print);
     fn visit_var(&mut self, statement: &Var);
     fn visit_block(&mut self, statement: &Block);
+    fn visit_if(&mut self, statement: &If);
+    fn visit_while(&mut self, statement: &While);
 }

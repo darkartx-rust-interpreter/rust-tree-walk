@@ -18,7 +18,10 @@ use super::{
         Variable,
         Var,
         Assign,
-        Block
+        Block,
+        If,
+        Logical,
+        While
     },
     token::TokenType,
     environment::Environment
@@ -241,6 +244,47 @@ impl ExpressionVisitor for Interpreter {
 
         self.push_to_stack(value);
     }
+    
+    fn visit_logical(&mut self, expression: &Logical) {
+        let result = self.evaluate_expression(expression.left());
+
+        let left = match result {
+            Ok(left) => left,
+            Err(error) => {
+                self.error = Some(error);
+                return
+            }
+        };
+
+        let left_as_bool = left.as_boolean();
+
+        match expression.operator().token_type() {
+            TokenType::Or => {
+                if left_as_bool.is_true() {
+                    self.push_to_stack(left);
+                    return
+                }
+            },
+            TokenType::And => {
+                if left_as_bool.is_false() {
+                    self.push_to_stack(left);
+                    return
+                }
+            },
+            _ => unreachable!()
+        }
+
+        let result = self.evaluate_expression(expression.right());
+
+        match result {
+            Ok(value) => {
+                self.push_to_stack(value);
+            },
+            Err(error) => {
+                self.error = Some(error);
+            }
+        }
+    }
 }
 
 impl StatementVisitor for Interpreter {
@@ -297,5 +341,57 @@ impl StatementVisitor for Interpreter {
 
         self.environment = self.environment.take().unwrap().enclosing();
         self.error = error;
+    }
+    
+    fn visit_if(&mut self, statement: &If) {
+        let result = self.evaluate_expression(statement.condition());
+
+        let condition = match result {
+            Ok(value) => value,
+            Err(error) => {
+                self.error = Some(error);
+                return
+            }
+        };
+
+        if condition.as_boolean().is_true() {
+            let result = self.evaluate_statement(statement.then_branch());
+
+            if let Err(error) = result {
+                self.error = Some(error);
+                return
+            }
+        } else if let Some(else_branch) = statement.else_branch() {
+            let result = self.evaluate_statement(else_branch);
+
+            if let Err(error) = result {
+                self.error = Some(error);
+            }
+        }
+    }
+    
+    fn visit_while(&mut self, statement: &While) {
+        loop {
+            let result = self.evaluate_expression(statement.condition());
+
+            let condition = match result {
+                Ok(value) => value,
+                Err(error) => {
+                    self.error = Some(error);
+                    return
+                }
+            };
+
+            if condition.as_boolean().is_false() {
+                break;
+            }
+
+            let result = self.evaluate_statement(statement.body());
+
+            if let Err(error) = result {
+                self.error = Some(error);
+                return
+            }
+        }
     }
 }

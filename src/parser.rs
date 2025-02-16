@@ -32,7 +32,10 @@ use super::{
         Var,
         Variable,
         Assign,
-        Block
+        Block,
+        If,
+        Logical,
+        While
     },
     error::{Error, ErrorKind},
     value::Value,
@@ -100,9 +103,24 @@ impl<'a> Parser<'a> {
     }
 
     fn statement(&mut self) -> Result<Box<dyn Statement>, Error> {
+        if self.tokens.token_match(&[For]) {
+            self.tokens.next()?;
+            return self.for_statement();
+        }
+
+        if self.tokens.token_match(&[If]) {
+            self.tokens.next()?;
+            return self.if_statement();
+        }
+
         if self.tokens.token_match(&[Print]) {
             self.tokens.next()?;
             return self.print_statement();
+        }
+
+        if self.tokens.token_match(&[While]) {
+            self.tokens.next()?;
+            return self.while_statement();
         }
 
         if self.tokens.token_match(&[LeftBrace]) {
@@ -111,6 +129,82 @@ impl<'a> Parser<'a> {
         }
         
         self.expression_statement()
+    }
+
+    fn for_statement(&mut self) -> Result<Box<dyn Statement>, Error> {
+        self.tokens.consume(&[LeftParen], "Expect \"(\' after \"for\"")?;
+
+        let initializer = if self.tokens.token_match(&[Semicolon]) {
+            self.tokens.next()?;
+            None
+        } else if self.tokens.token_match(&[Var]) {
+            self.tokens.next()?;
+            Some(self.var_declaration()?)
+        } else {
+            Some(self.expression_statement()?)
+        };
+
+        let condition = if self.tokens.token_match(&[Semicolon]) {
+            Box::new(Literal::new(Value::True))
+        } else {
+            self.expression()?
+        };
+
+        self.tokens.consume(&[Semicolon], "expect \";\" after condition")?;
+
+        let increment = if self.tokens.token_match(&[RightParen]) {
+            None
+        } else {
+            Some(self.expression()?)
+        };
+
+        self.tokens.consume(&[RightParen], "expect \")\" after clauses")?;
+
+        let mut body = self.statement()?;
+
+        if let Some(increment) = increment {
+            body = Box::new(
+                Block::new(vec![body, Box::new(ExpressionStatement::new(increment))])
+            );
+        }
+
+        body = Box::new(
+            While::new(condition, body)
+        );
+
+        if let Some(initializer) = initializer {
+            body = Box::new(
+                Block::new(vec![initializer, body])
+            );
+        }
+
+        Ok(body)
+    }
+
+    fn while_statement(&mut self) -> Result<Box<dyn Statement>, Error> {
+        self.tokens.consume(&[LeftParen], "Expect \"(\' after \"while\"")?;
+        let condition = self.expression()?;
+        self.tokens.consume(&[RightParen], "Expect \")\" after while condition")?;
+
+        let body = self.statement()?;
+
+        Ok(Box::new(While::new(condition, body)))
+    }
+
+    fn if_statement(&mut self) -> Result<Box<dyn Statement>, Error> {
+        self.tokens.consume(&[LeftParen], "Expect \"(\' after \"if\"")?;
+        let condition = self.expression()?;
+        self.tokens.consume(&[RightParen], "Expect \")\" after if condition")?;
+
+        let then_branch = self.statement()?;
+        let else_branch = if self.tokens.token_match(&[Else]) {
+            self.tokens.next()?;
+            Some(self.statement()?)
+        } else {
+            None
+        };
+
+        Ok(Box::new(If::new(condition, then_branch, else_branch)))
     }
 
     fn block(&mut self) -> Result<Box<dyn Statement>, Error> {
@@ -159,7 +253,7 @@ impl<'a> Parser<'a> {
     }
 
     fn assignment(&mut self) -> Result<Box<dyn Expression>, Error> {
-        let expression = self.equaity()?;
+        let expression = self.or()?;
 
         if self.tokens.token_match(&[Equal]) {
             let token = self.tokens.next()?;
@@ -182,6 +276,30 @@ impl<'a> Parser<'a> {
                     )
                 }
             }
+        }
+
+        Ok(expression)
+    }
+
+    fn or(&mut self) -> Result<Box<dyn Expression>, Error> {
+        let mut expression = self.and()?;
+
+        while self.tokens.token_match(&[Or]) {
+            let operator = self.tokens.next()?.unwrap();
+            let right = self.and()?;
+            expression = Box::new(Logical::new(expression, operator, right))
+        }
+
+        Ok(expression)
+    }
+
+    fn and(&mut self) -> Result<Box<dyn Expression>, Error> {
+        let mut expression = self.equaity()?;
+
+        while self.tokens.token_match(&[And]) {
+            let operator = self.tokens.next()?.unwrap();
+            let right = self.equaity()?;
+            expression = Box::new(Logical::new(expression, operator, right))
         }
 
         Ok(expression)
